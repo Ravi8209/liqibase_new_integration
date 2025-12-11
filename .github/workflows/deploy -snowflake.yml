@@ -49,7 +49,7 @@ jobs:
             --username="$SF_USER" \
             --password="$SF_PASSWORD" \
             --driver=net.snowflake.client.jdbc.SnowflakeDriver \
-            --changelog-file=liquibase/changelog/liquibase-master.xml \
+            --changelog-file=changelog/liquibase-master.xml \
             update-sql --output-file=dry-run.sql
 
           if grep -q "CREATE OR REPLACE TABLE sales_db.customer_schema.customer_table" dry-run.sql; then
@@ -59,7 +59,7 @@ jobs:
               --username="$SF_USER" \
               --password="$SF_PASSWORD" \
               --driver=net.snowflake.client.jdbc.SnowflakeDriver \
-              --changelog-file=liquibase/changelog/liquibase-master.xml \
+              --changelog-file=changelog/liquibase-master.xml \
               update
 
             touch .first_run_done
@@ -89,5 +89,5 @@ jobs:
             --username="$SF_USER" \
             --password="$SF_PASSWORD" \
             --driver=net.snowflake.client.jdbc.SnowflakeDriver \
-            --changelog-file=liquibase/changelog/liquibase-master.xml \
+            --changelog-file=changelog/liquibase-master.xml \
             update
