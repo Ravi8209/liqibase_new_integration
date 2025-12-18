@@ -11,7 +11,6 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,15 +25,14 @@ jobs:
 
       - name: Download Liquibase CLI
         run: |
-          curl -sL https://github.com/liquibase/liquibase/releases/download/v4.24.0/liquibase-4.24.0.zip -o liquibase.zip
+          curl -sL \
+            https://github.com/liquibase/liquibase/releases/download/v4.24.0/liquibase-4.24.0.zip \
+            -o liquibase.zip
           unzip -q liquibase.zip -d liquibase-cli
           chmod +x liquibase-cli/liquibase
 
-      # ===============================
-      # FIRST RUN → DRY RUN ONLY
-      # ===============================
-      - name: First run → print SQL only
-        if: hashFiles('.first_run_done') == ''
+      - name: First run → dry-run and conditional apply
+        if: "!contains(hashFiles('.first_run_done'), '')"
         env:
           SF_ACCOUNT:   ${{ secrets.SF_ACCOUNT }}
           SF_DATABASE:  ${{ secrets.SF_DATABASE }}
@@ -45,8 +43,6 @@ jobs:
           SF_PASSWORD:  ${{ secrets.SF_PASSWORD }}
         run: |
           URL="jdbc:snowflake://${SF_ACCOUNT}.snowflakecomputing.com/?db=${SF_DATABASE}&schema=${SF_SCHEMA}&warehouse=${SF_WAREHOUSE}&role=${SF_ROLE}"
-
-          echo "🔍 First run: generating SQL preview"
 
           liquibase-cli/liquibase \
             --url="$URL" \
@@ -54,21 +50,30 @@ jobs:
             --password="$SF_PASSWORD" \
             --driver=net.snowflake.client.jdbc.SnowflakeDriver \
             --changelog-file=changelog/liquibase-functions.xml \
-            update-sql
+            update-sql --output-file=dry-run.sql
 
-          echo "📝 Marking first run done"
-          touch .first_run_done
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .first_run_done
-          git commit -m "chore: mark first run complete"
-          git push origin main
+          if grep -q "CREATE OR REPLACE TABLE sales_db.customer_schema.customer_table" dry-run.sql; then
+            echo "🔨 Table missing — running real update"
+            liquibase-cli/liquibase \
+              --url="$URL" \
+              --username="$SF_USER" \
+              --password="$SF_PASSWORD" \
+              --driver=net.snowflake.client.jdbc.SnowflakeDriver \
+              --changelog-file=changelog/liquibase-functions.xml \
+              update
 
-      # ===============================
-      # SECOND RUN → APPLY CHANGES
-      # ===============================
-      - name: Second run → execute changes
-        if: hashFiles('.first_run_done') != ''
+            touch .first_run_done
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .first_run_done
+            git commit -m "chore: mark first run complete"
+            git push origin main
+          else
+            echo "✅ Table exists — dry-run only"
+          fi
+
+      - name: Subsequent runs — always apply
+        if: contains(hashFiles('.first_run_done'), '')
         env:
           SF_ACCOUNT:   ${{ secrets.SF_ACCOUNT }}
           SF_DATABASE:  ${{ secrets.SF_DATABASE }}
@@ -79,9 +84,6 @@ jobs:
           SF_PASSWORD:  ${{ secrets.SF_PASSWORD }}
         run: |
           URL="jdbc:snowflake://${SF_ACCOUNT}.snowflakecomputing.com/?db=${SF_DATABASE}&schema=${SF_SCHEMA}&warehouse=${SF_WAREHOUSE}&role=${SF_ROLE}"
-
-          echo "🚀 Second run: applying changes to database"
-
           liquibase-cli/liquibase \
             --url="$URL" \
             --username="$SF_USER" \
@@ -89,3 +91,4 @@ jobs:
             --driver=net.snowflake.client.jdbc.SnowflakeDriver \
             --changelog-file=changelog/liquibase-functions.xml \
             update
+			
