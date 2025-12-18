@@ -28,36 +28,38 @@ jobs:
           unzip -q liquibase.zip -d liquibase
           chmod +x liquibase/liquibase
 
-      # =========================
-      # PR → SQL PREVIEW ONLY
-      # =========================
-      - name: Liquibase SQL Preview (update-sql)
+      # ============================
+      # PR → SQL PREVIEW (NO EXECUTE)
+      # ============================
+      - name: Liquibase SQL Preview
         if: github.event_name == 'pull_request'
         env:
-          LIQUIBASE_COMMAND_URL: jdbc:snowflake://${{ secrets.SF_ACCOUNT }}.snowflakecomputing.com
+          LIQUIBASE_COMMAND_URL: >
+            jdbc:snowflake://${{ secrets.SF_ACCOUNT }}.snowflakecomputing.com
+            /?warehouse=${{ secrets.SF_WAREHOUSE }}
+            &role=${{ secrets.SF_ROLE }}
           LIQUIBASE_COMMAND_USERNAME: ${{ secrets.SF_USER }}
           LIQUIBASE_COMMAND_PASSWORD: ${{ secrets.SF_PASSWORD }}
-          LIQUIBASE_COMMAND_WAREHOUSE: ${{ secrets.SF_WAREHOUSE }}
-          LIQUIBASE_COMMAND_ROLE: ${{ secrets.SF_ROLE }}
         run: |
-          echo "🔍 Running Liquibase SQL preview"
+          echo "🔍 Running Liquibase update-sql"
           liquibase/liquibase \
             update-sql \
-            --changelog-file=changelog/liquibase-master.xml
+            --changelog-file=liquibase/changelog/liquibase-master.xml
 
-      # =========================
-      # PUSH TO MAIN → APPLY
-      # =========================
-      - name: Liquibase Apply Changes (update)
+      # ============================
+      # PUSH → APPLY CHANGES
+      # ============================
+      - name: Liquibase Apply Changes
         if: github.event_name == 'push'
         env:
-          LIQUIBASE_COMMAND_URL: jdbc:snowflake://${{ secrets.SF_ACCOUNT }}.snowflakecomputing.com
+          LIQUIBASE_COMMAND_URL: >
+            jdbc:snowflake://${{ secrets.SF_ACCOUNT }}.snowflakecomputing.com
+            /?warehouse=${{ secrets.SF_WAREHOUSE }}
+            &role=${{ secrets.SF_ROLE }}
           LIQUIBASE_COMMAND_USERNAME: ${{ secrets.SF_USER }}
           LIQUIBASE_COMMAND_PASSWORD: ${{ secrets.SF_PASSWORD }}
-          LIQUIBASE_COMMAND_WAREHOUSE: ${{ secrets.SF_WAREHOUSE }}
-          LIQUIBASE_COMMAND_ROLE: ${{ secrets.SF_ROLE }}
         run: |
           echo "🚀 Applying Liquibase changes"
           liquibase/liquibase \
             update \
-            --changelog-file=changelog/liquibase-master.xml
+            --changelog-file=liquibase/changelog/liquibase-master.xml
