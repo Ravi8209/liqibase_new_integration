@@ -91,4 +91,3 @@ jobs:
             --driver=net.snowflake.client.jdbc.SnowflakeDriver \
             --changelog-file=changelog/liquibase-functions.xml \
             update
-			
