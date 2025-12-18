@@ -1,8 +1,8 @@
 --liquibase formatted sql
 
---changeset auto:2
+--changeset auto:5
 
-CREATE OR REPLACE TABLE sales_db.customer_schema.customer_table (
+CREATE OR REPLACE TABLE sales_db.customer_schema.customer_tableghf (
   id INT,
   name STRING
 );
@@ -15,12 +15,4 @@ ALTER TABLE sales_db.customer_schema.customer_table ADD COLUMN created_at TIMEST
 
 
 
---changeset auto:4
---preconditions onFail:WARN 
---precondition-sql-check expectedResult:0 SELECT COUNT(*) FROM example_table
---comment: /* Comments should go after the precondition. Otherwise, Liquibase returns an error. */
 
-CREATE OR REPLACE TABLE sales_db.customer_schema.patient_table (
-  id INT,
-  name STRING
-);
