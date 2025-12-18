@@ -1,20 +1,22 @@
-name: Liquibase Snowflake Deployment
+name: Deploy to Snowflake
 
 on:
-  pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
-  liquibase:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -25,41 +27,65 @@ jobs:
       - name: Download Liquibase CLI
         run: |
           curl -sL https://github.com/liquibase/liquibase/releases/download/v4.24.0/liquibase-4.24.0.zip -o liquibase.zip
-          unzip -q liquibase.zip -d liquibase
-          chmod +x liquibase/liquibase
+          unzip -q liquibase.zip -d liquibase-cli
+          chmod +x liquibase-cli/liquibase
 
-      # ============================
-      # PR → SQL PREVIEW (NO EXECUTE)
-      # ============================
-      - name: Liquibase SQL Preview
-        if: github.event_name == 'pull_request'
+      # ===============================
+      # FIRST RUN → DRY RUN ONLY
+      # ===============================
+      - name: First run → print SQL only
+        if: hashFiles('.first_run_done') == ''
         env:
-          LIQUIBASE_COMMAND_URL: >
-            jdbc:snowflake://${{ secrets.SF_ACCOUNT }}.snowflakecomputing.com
-            /?warehouse=${{ secrets.SF_WAREHOUSE }}
-            &role=${{ secrets.SF_ROLE }}
-          LIQUIBASE_COMMAND_USERNAME: ${{ secrets.SF_USER }}
-          LIQUIBASE_COMMAND_PASSWORD: ${{ secrets.SF_PASSWORD }}
+          SF_ACCOUNT:   ${{ secrets.SF_ACCOUNT }}
+          SF_DATABASE:  ${{ secrets.SF_DATABASE }}
+          SF_SCHEMA:    ${{ secrets.SF_SCHEMA }}
+          SF_WAREHOUSE: ${{ secrets.SF_WAREHOUSE }}
+          SF_ROLE:      ${{ secrets.SF_ROLE }}
+          SF_USER:      ${{ secrets.SF_USER }}
+          SF_PASSWORD:  ${{ secrets.SF_PASSWORD }}
         run: |
-          echo "🔍 Running Liquibase update-sql"
-          liquibase/liquibase \
-            update-sql \
-            --changelog-file=liquibase/changelog/liquibase-master.xml
+          URL="jdbc:snowflake://${SF_ACCOUNT}.snowflakecomputing.com/?db=${SF_DATABASE}&schema=${SF_SCHEMA}&warehouse=${SF_WAREHOUSE}&role=${SF_ROLE}"
 
-      # ============================
-      # PUSH → APPLY CHANGES
-      # ============================
-      - name: Liquibase Apply Changes
-        if: github.event_name == 'push'
+          echo "🔍 First run: generating SQL preview"
+
+          liquibase-cli/liquibase \
+            --url="$URL" \
+            --username="$SF_USER" \
+            --password="$SF_PASSWORD" \
+            --driver=net.snowflake.client.jdbc.SnowflakeDriver \
+            --changelog-file=changelog/liquibase-functions.xml \
+            update-sql
+
+          echo "📝 Marking first run done"
+          touch .first_run_done
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .first_run_done
+          git commit -m "chore: mark first run complete"
+          git push origin main
+
+      # ===============================
+      # SECOND RUN → APPLY CHANGES
+      # ===============================
+      - name: Second run → execute changes
+        if: hashFiles('.first_run_done') != ''
         env:
-          LIQUIBASE_COMMAND_URL: >
-            jdbc:snowflake://${{ secrets.SF_ACCOUNT }}.snowflakecomputing.com
-            /?warehouse=${{ secrets.SF_WAREHOUSE }}
-            &role=${{ secrets.SF_ROLE }}
-          LIQUIBASE_COMMAND_USERNAME: ${{ secrets.SF_USER }}
-          LIQUIBASE_COMMAND_PASSWORD: ${{ secrets.SF_PASSWORD }}
+          SF_ACCOUNT:   ${{ secrets.SF_ACCOUNT }}
+          SF_DATABASE:  ${{ secrets.SF_DATABASE }}
+          SF_SCHEMA:    ${{ secrets.SF_SCHEMA }}
+          SF_WAREHOUSE: ${{ secrets.SF_WAREHOUSE }}
+          SF_ROLE:      ${{ secrets.SF_ROLE }}
+          SF_USER:      ${{ secrets.SF_USER }}
+          SF_PASSWORD:  ${{ secrets.SF_PASSWORD }}
         run: |
-          echo "🚀 Applying Liquibase changes"
-          liquibase/liquibase \
-            update \
-            --changelog-file=liquibase/changelog/liquibase-master.xml
+          URL="jdbc:snowflake://${SF_ACCOUNT}.snowflakecomputing.com/?db=${SF_DATABASE}&schema=${SF_SCHEMA}&warehouse=${SF_WAREHOUSE}&role=${SF_ROLE}"
+
+          echo "🚀 Second run: applying changes to database"
+
+          liquibase-cli/liquibase \
+            --url="$URL" \
+            --username="$SF_USER" \
+            --password="$SF_PASSWORD" \
+            --driver=net.snowflake.client.jdbc.SnowflakeDriver \
+            --changelog-file=changelog/liquibase-functions.xml \
+            update
