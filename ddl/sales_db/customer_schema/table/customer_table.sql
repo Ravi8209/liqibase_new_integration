@@ -1,8 +1,8 @@
 --liquibase formatted sql
 
---changeset auto:5
+--changeset auto:7
 
-CREATE OR REPLACE TABLE sales_db.customer_schema.customer_tableghf (
+CREATE OR REPLACE TABLE sales_db.customer_schema.customer_free (
   id INT,
   name STRING
 );
